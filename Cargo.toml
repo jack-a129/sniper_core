@@ -2,10 +2,6 @@
 name = "sniper_core"
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
-authors = ["Navy Jack <etuposuser@outlook.jp>"]
-description = "A Super Kaeuta Maker"
-repository = "https://github.com/jack-a129/sniper_core"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
