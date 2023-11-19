@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use levenshtein::levenshtein;
 
 use serde::Deserialize;
 use regex::Regex;
@@ -27,18 +28,36 @@ pub fn ruby_gen(str :String) -> Result<String,std::io::Error>{
     }    
 }
 
-fn change_word(word :&str,wordvec :Vec<String>,before_word :&Vec<String>) -> Result<String,std::io::Error>{
-    let i = word.len();
+fn word_search(s :&str,wordvec :Vec<String>,before_word :&Vec<String>) -> Result<String,std::io::Error>{
     let mut count = 0;
-    for mut w in wordvec{
+    let mut loopcount = 0;
+    let mut num = 9999;
+    let mut is_word = false;
+    for mut w in wordvec.clone(){
         w = w.replace("{", "");
         w = w.replace("}", "");
-        if w.len() == i-2{
-            return Ok(before_word[count].clone());
+        let res = &s.replace("{", "").replace("}", "");
+        let x = levenshtein(&res,&w);
+        if x < num{
+            is_word = true;
+            count = loopcount;
+            num = x;
         }
-        count += 1;
+        loopcount += 1;
     }
-    Err(std::io::Error::new(std::io::ErrorKind::NotFound, "error"))
+    if is_word{
+        Ok(before_word[count].clone())
+    }else{
+        Err(std::io::Error::new(std::io::ErrorKind::NotFound, "kaeuta_not_found"))
+    }
+}
+
+fn change_word(word :&str,wordvec :&Vec<String>,before_word :&Vec<String>) -> Result<String,std::io::Error>{
+    if let Ok(n) = word_search(word, wordvec.clone(),before_word){
+        Ok(n)
+    }else{
+        Err(std::io::Error::new(std::io::ErrorKind::NotFound, "kaeuta_not_found"))
+    }    
 }
 
 pub fn make_kaeuta(change :&str,word :&Vec<String>) -> Result<String,std::io::Error>{
@@ -58,7 +77,7 @@ pub fn make_kaeuta(change :&str,word :&Vec<String>) -> Result<String,std::io::Er
     let mut change_after = change.clone().to_string();
     for m in ruby_vec{
         if m == ""{break;}
-        if let Ok(after_word) = change_word(&m,ruby_word.clone(),&word){
+        if let Ok(after_word) = change_word(&m,&ruby_word,&word){
             change_after = change_after.replace(old.get(&m).unwrap(), &after_word);
         }else{
             return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "error"));
