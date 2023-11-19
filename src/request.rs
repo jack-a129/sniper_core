@@ -1,13 +1,8 @@
-use std::fs;
 use curl::easy::Easy;
 use curl::easy::List;
 
 pub fn keyget() -> String{
-    let api = fs::read_to_string(".env");
-    match api{
-        Ok(n) => n,
-        Err(_) => panic!(".env error"),
-    }
+    include_str!("../.env").to_string()
 }
 //
 pub fn rubymake(key :String,str :&str) -> Result<Vec<u8>,std::io::Error>{
