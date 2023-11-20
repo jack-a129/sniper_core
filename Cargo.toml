@@ -10,3 +10,8 @@ regex="1.8.4"
 levenshtein = "1.0.5"
 vibrato = "0.5.0"
 zstd = "0.12.3"
+wasm-bindgen="0.2"
+getrandom = { version = "0.2", features = ["js"] }
+
+[lib]
+crate-type=["cdylib"]
