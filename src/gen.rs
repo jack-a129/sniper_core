@@ -1,31 +1,31 @@
 use std::collections::HashMap;
 use levenshtein::levenshtein;
 
-use serde::Deserialize;
+use std::fs::File;
+use vibrato::{Dictionary, Tokenizer};
+
 use regex::Regex;
 
-#[path="request.rs"]
-mod request;
-
-#[derive(Deserialize)]
-struct Json{
-    converted :String,
-}
-
 pub fn ruby_gen(str :String) -> Result<String,std::io::Error>{
-    let key = request::keyget();
-    let r = request::rubymake(key,&str);
-    if let Ok(n) = r{
-        let text = String::from_utf8_lossy(&n).to_string();
-        let j :Result<Json,serde_json::Error> = serde_json::from_str(&text);
-        if let Ok(n) = j{
-            Ok(n.converted)   
-        }else{
-            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "error"))
-        }
-    }else{
-        Err(std::io::Error::new(std::io::ErrorKind::NotFound, "error"))
-    }    
+    let reader = zstd::Decoder::new(File::open("system.dic.zst")?)?;
+    let dict = Dictionary::read(reader).unwrap();
+    let tokenizer = Tokenizer::new(dict)
+        .ignore_space(true).unwrap()
+        .max_grouping_len(24);
+    let mut worker = tokenizer.new_worker();
+    worker.reset_sentence(&str);
+    worker.tokenize();
+    let mut allruby = String::from("");
+    worker.token_iter()
+    .filter(|t| { // 絞り込み
+        let words: Vec<&str> = t.feature().split(',').collect();
+        words.len() >= 8        
+    })
+    .for_each(|t| { // 出力
+            let ruby :Vec<&str> = t.feature().split(",").collect();
+            allruby = format!("{}{}",allruby,ruby[7]);
+    });
+    Ok(allruby)
 }
 
 fn word_search(s :&str,wordvec :Vec<String>,before_word :&Vec<String>) -> Result<String,std::io::Error>{
