@@ -1,2 +1,7 @@
 /target
 .env
+index.html
+sample.js
+about.hbs
+about.toml
+license.html

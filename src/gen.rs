@@ -1,13 +1,17 @@
 use std::collections::HashMap;
 use levenshtein::levenshtein;
 
-use std::fs::File;
 use vibrato::{Dictionary, Tokenizer};
 
 use regex::Regex;
 
+pub const DIC :&[u8] = include_bytes!("../system.dic.zst") as &[u8];
+
 pub fn ruby_gen(str :String) -> Result<String,std::io::Error>{
-    let reader = zstd::Decoder::new(File::open("system.dic.zst")?)?;
+    if str.find("|@").is_some(){
+        return Ok(str.replace("|@", ""));
+    }
+    let reader = zstd::Decoder::new(DIC)?;
     let dict = Dictionary::read(reader).unwrap();
     let tokenizer = Tokenizer::new(dict)
         .ignore_space(true).unwrap()
@@ -28,32 +32,42 @@ pub fn ruby_gen(str :String) -> Result<String,std::io::Error>{
     Ok(allruby)
 }
 
-fn word_search(s :&str,wordvec :Vec<String>,before_word :&Vec<String>) -> Result<String,std::io::Error>{
-    let mut count = 0;
-    let mut loopcount = 0;
-    let mut num = 9999;
-    let mut is_word = false;
-    for mut w in wordvec.clone(){
-        w = w.replace("{", "");
-        w = w.replace("}", "");
-        let res = &s.replace("{", "").replace("}", "");
-        let x = levenshtein(&res,&w);
-        if x < num{
-            is_word = true;
-            count = loopcount;
-            num = x;
+struct Search{
+    s_vec :Vec<String>
+}
+
+impl Search{
+    fn word_search(&mut self,s :&str,wordvec :Vec<String>,before_word :&Vec<String>) -> Result<String,std::io::Error>{
+        let mut count = 0;
+        let mut loopcount = 0;
+        let mut num = 9999;
+        let mut is_word = false;
+        let st = s.replace("[", "").replace("]", "");
+        for w in wordvec.clone(){
+            let x = levenshtein(&st,&w);
+            if x < num{
+                is_word = true;
+                count = loopcount;
+                num = x;
+            }else if x == num {
+                if let Some(_) = self.s_vec.iter().position(|item| *item == before_word[count].clone()){
+                    count = loopcount;
+                }
+            }
+            loopcount += 1;
         }
-        loopcount += 1;
-    }
-    if is_word{
-        Ok(before_word[count].clone())
-    }else{
-        Err(std::io::Error::new(std::io::ErrorKind::NotFound, "kaeuta_not_found"))
+        if is_word{
+            self.s_vec.push(before_word[count].clone());
+            Ok(before_word[count].clone())
+        }else{
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "kaeuta_not_found"))
+        }
     }
 }
 
-fn change_word(word :&str,wordvec :&Vec<String>,before_word :&Vec<String>) -> Result<String,std::io::Error>{
-    if let Ok(n) = word_search(word, wordvec.clone(),before_word){
+
+fn change_word(search :&mut Search,word :&str,wordvec :&Vec<String>,before_word :&Vec<String>) -> Result<String,std::io::Error>{
+    if let Ok(n) = search.word_search(word, wordvec.clone(),before_word){
         Ok(n)
     }else{
         Err(std::io::Error::new(std::io::ErrorKind::NotFound, "kaeuta_not_found"))
@@ -74,14 +88,30 @@ pub fn make_kaeuta(change :&str,word :&Vec<String>) -> Result<String,std::io::Er
         old.insert(r.clone(), x.as_str());
         ruby_vec.push(r);
     }
+    let mut serch_change = Search{
+        s_vec :Vec::new(),
+    };
     let mut change_after = change.clone().to_string();
-    for m in ruby_vec{
+    for m in ruby_vec.clone(){
         if m == ""{break;}
-        if let Ok(after_word) = change_word(&m,&ruby_word,&word){
+        if let Ok(after_word) = change_word(&mut serch_change,&m,&ruby_word,&word){
             change_after = change_after.replace(old.get(&m).unwrap(), &after_word);
         }else{
             return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "error"));
         }
     }
-    Ok(change_after)
+    let re_box = Regex::new(r"\[.*?\]").unwrap();
+    let mut box_vec = Vec::new();
+    for b in re_box.find_iter(change) {
+        box_vec.push(b.as_str().to_string());
+    }
+    for s in box_vec.clone(){
+        if s == ""{break;}
+        if let Ok(after_word) = change_word(&mut serch_change,&s,&ruby_word.clone(),&word){
+            change_after = change_after.replace(&s, &after_word.replace("|@", ""));
+        }else{
+            return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "error"));
+        }
+    }
+    Ok(change_after.replace("|@", ""))
 }
